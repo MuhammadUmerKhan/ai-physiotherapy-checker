@@ -1,7 +1,7 @@
 # main.py
-from video_handler import VideoHandler
-from pose_estimator import PoseEstimator
-from feedback_engine import FeedbackEngine
+from src.video_handler import VideoHandler
+from src.pose_estimator import PoseEstimator
+from src.feedback_engine import FeedbackEngine
 from utils.drawing import draw_overlay
 import cv2
 
