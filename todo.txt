@@ -25,5 +25,3 @@ PHASES COMPLETED
 [Completed] Phase 7: Config file + easy customization
 
 Status: MVP Complete - Works perfectly for arm exercises!
-Last updated: November 2025
-Keep rocking those perfect reps!
