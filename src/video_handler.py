@@ -1,7 +1,7 @@
 # video_handler.py
 import cv2
 import os
-from config import REFERENCE_VIDEO, FRAME_WIDTH, FRAME_HEIGHT
+from src.config import REFERENCE_VIDEO, FRAME_WIDTH, FRAME_HEIGHT
 
 class VideoHandler:
     def __init__(self):
