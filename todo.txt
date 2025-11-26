@@ -1,0 +1,29 @@
+# Real-Time Exercise Coach - TODO & Project Summary
+# Simple, clean, and ready for future improvements
+
+LIBRARIES USED
+├── opencv-python      - Video capture, resize, display, drawing
+├── mediapipe          - Fast & accurate pose estimation (33 landmarks)
+└── numpy              - Angle calculations and array operations
+
+
+TECH STACK
+├── Python 3.8+        
+├── OpenCV             - Computer Vision & UI
+├── MediaPipe Pose     - Real-time human pose detection
+├── NumPy              - Math & vector operations
+└── Pure Python        - No heavy frameworks (lightweight & fast)
+
+
+PHASES COMPLETED
+[Completed] Phase 1: Project setup & folder structure (professional & scalable)
+[Completed] Phase 2: Reference video + webcam side-by-side display
+[Completed] Phase 3: MediaPipe pose detection on both coach and user
+[Completed] Phase 4: Symmetric arm angle calculation (elbow + shoulder)
+[Completed] Phase 5: Real-time posture comparison with visual feedback
+[Completed] Phase 6: Clean UI with skeleton overlay + color-coded messages
+[Completed] Phase 7: Config file + easy customization
+
+Status: MVP Complete - Works perfectly for arm exercises!
+Last updated: November 2025
+Keep rocking those perfect reps!
