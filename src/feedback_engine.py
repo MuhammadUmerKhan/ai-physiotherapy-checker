@@ -14,6 +14,6 @@ class FeedbackEngine:
         if error < self.tolerance:
             return "CORRECT! PERFECT!", (0, 255, 0)
         elif error < self.tolerance + 20:
-            return f"Almost there! ({error:.0f}° off)", (0, 255, 255)
+            return f"Almost there!", (0, 255, 255)
         else:
-            return f"Follow along! ({error:.0f}° off)", (0, 0, 255)
+            return f"Follow along!", (0, 0, 255)

@@ -1,53 +1,97 @@
 # main.py
-from src.video_handler import VideoHandler
-from src.pose_estimator import PoseEstimator
-from src.feedback_engine import FeedbackEngine
-from utils.drawing import draw_overlay
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi.responses import HTMLResponse
+from src.pose_processor import PoseProcessor
+from src.video_service import VideoService
+from schemas.schemas import FeedbackResponse
 import cv2
+import numpy as np
+import base64
+import asyncio
 
-def main():
-    handler = VideoHandler()
-    estimator = PoseEstimator()
-    feedback_engine = FeedbackEngine(tolerance=38)
+app = FastAPI(title="Real-Time Exercise Coach API")
 
-    print("\n" + "="*60)
-    print("   REAL-TIME EXERCISE COACH STARTED!")
-    print("   Follow the coach on the left → Get green 'CORRECT!'")
-    print("   Press 'q' to quit")
-    print("="*60 + "\n")
+# Global reference video service (can be changed per user later)
+current_video_service = VideoService("usama.mp4")
+pose_processor = PoseProcessor()
 
-    while True:
-        ref_frame = handler.get_reference_frame()
-        user_frame = handler.get_user_frame()
+def frame_to_base64(frame):
+    _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+    return base64.b64encode(buffer).decode('utf-8')
 
-        if ref_frame is None or user_frame is None:
-            break
+@app.get("/", response_class=HTMLResponse)
+async def home():
+    return """
+    <h1>Exercise Coach API is Running</h1>
+    <p>Use WebSocket at: <code>ws://localhost:8000/ws/coach/{video_name}</code></p>
+    <p>Send webcam frames as binary JPEG → Receive feedback + coach frame</p>
+    """
 
-        # Process poses
-        ref_angles = estimator.get_arm_angles(ref_frame)
-        user_angles = estimator.get_arm_angles(user_frame, is_user=True)
+@app.websocket("/ws/coach/{video_name}")
+async def websocket_endpoint(websocket: WebSocket, video_name: str):
+    await websocket.accept()
+    global current_video_service
+    try:
+        # Restart video service with new video
+        current_video_service.release()
+        current_video_service = VideoService(video_name)
 
-        # Get feedback
-        feedback, color = feedback_engine.evaluate(user_angles, ref_angles)
+        while True:
+            # Receive user webcam frame (binary)
+            data = await websocket.receive_bytes()
+            nparr = np.frombuffer(data, np.uint8)
+            user_frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-        # Draw skeletons and feedback
-        if estimator.last_user_results:
-            draw_overlay(user_frame, estimator.last_user_results, feedback, color)
+            if user_frame is None:
+                await websocket.send_json({"error": "Invalid frame"})
+                continue
 
-        # Labels
-        cv2.putText(ref_frame, "COACH", (30, 80), cv2.FONT_HERSHEY_SIMPLEX, 2, (0,255,0), 5)
-        cv2.putText(user_frame, "YOU", (30, 80), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 5)
+            user_frame = cv2.resize(user_frame, (640, 480))
 
-        # Combine and show
-        combined = cv2.hconcat([ref_frame, user_frame])
-        cv2.imshow("Real-Time Exercise Coach - Follow the Coach!", combined)
+            # Get current coach frame
+            coach_frame = current_video_service.get_next_frame()
+            if coach_frame is None:
+                coach_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                cv2.putText(coach_frame, "Video Error", (100, 240), cv2.FONT_HERSHEY_SIMPLEX, 2, (0,0,255), 4)
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+            # Process both frames
+            user_rgb = cv2.cvtColor(user_frame, cv2.COLOR_BGR2RGB)
+            coach_rgb = cv2.cvtColor(coach_frame, cv2.COLOR_BGR2RGB)
 
-    handler.release()
-    cv2.destroyAllWindows()
-    print("Workout finished! Great job!")
+            user_results = pose_processor.pose.process(user_rgb)
+            coach_results = pose_processor.pose.process(coach_rgb)
 
-if __name__ == "__main__":
-    main()
+            # Draw skeleton on user
+            if user_results.pose_landmarks:
+                mp_drawing.draw_landmarks(
+                    user_frame, user_results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+
+            # Compare and get feedback
+            feedback, error, is_correct = pose_processor.compare_poses(
+                coach_results.pose_landmarks, user_results.pose_landmarks)
+
+            # Add text
+            cv2.putText(coach_frame, "COACH", (30, 80), cv2.FONT_HERSHEY_SIMPLEX, 2, (0,255,0), 5)
+            cv2.putText(user_frame, "YOU", (30, 80), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 5)
+            color = (0, 255, 0) if is_correct else (0, 0, 255)
+            cv2.putText(user_frame, feedback, (30, 180), cv2.FONT_HERSHEY_SIMPLEX, 1.8, color, 5)
+
+            # Encode both frames
+            coach_b64 = frame_to_base64(coach_frame)
+            user_b64 = frame_to_base64(user_frame)
+
+            # Send back to frontend
+            await websocket.send_json({
+                "coach_frame": f"data:image/jpeg;base64,{coach_b64}",
+                "user_frame": f"data:image/jpeg;base64,{user_b64}",
+                "feedback": feedback,
+                "error": error,
+                "is_correct": is_correct
+            })
+
+    except WebSocketDisconnect:
+        print("Client disconnected")
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        current_video_service.release()
